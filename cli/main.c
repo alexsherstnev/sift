@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
   if (num_keypoints > 0) {
     for (uint32_t i = 0; i < num_keypoints; ++i) {
       sift_keypoint_t keypoint = keypoints[i];
-      printf("%f, %f\n", keypoint.x, keypoint.y);
+      printf("%f, %f, %f\n", keypoint.x, keypoint.y, keypoint.size);
     }
   }
 

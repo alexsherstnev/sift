@@ -434,6 +434,9 @@ static bool adjust_or_discard_keypoint(const detector_context_t *context, uint32
 
   keypoint->x = (x + dx) * (1 << octave);
   keypoint->y = (y + dy) * (1 << octave);
+  keypoint->size = context->sigma * powf(2.0f, (layer + ds) / (float)context->octave_layers) * (1 << octave);
+  keypoint->octave = octave + (layer << 8) + ((int32_t)roundf((ds + 0.5f) * 255) << 16);
+  keypoint->response = fabsf(response);
 
   return true;
 }
@@ -461,7 +464,11 @@ static uint32_t find_scale_space_extrema(const detector_context_t *context, sift
 
           sift_keypoint_t potential_keypoint = {
             .x = x,
-            .y = y
+            .y = y,
+            .size = 0.0f,
+            .angle = 0.0f,
+            .response = 0.0f,
+            .octave = octave
           };
           if (adjust_or_discard_keypoint(context, octave, layer, x, y, &potential_keypoint)) {
             (*keypoints)[num_keypoints++] = potential_keypoint;
@@ -628,6 +635,7 @@ uint32_t sift_detect_and_compute(const sift_detector_t *detector, const sift_ima
   for (uint32_t i = 0; i < num_keypoints; ++i) {
     (*keypoints)[i].x *= 0.5f;
     (*keypoints)[i].y *= 0.5f;
+    (*keypoints)[i].size *= 0.5f;
   }
 
   // Free all resources

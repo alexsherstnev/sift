@@ -33,9 +33,18 @@ typedef struct {
   uint32_t border_width;    ///< Width of border in which to ignore keypoints
 } sift_detector_t;
 
+/**
+ * @brief SIFT keypoint descriptor container
+ * @details Contains both geometric attributes and feature descriptor
+ */
 typedef struct {
-  float x, y;
-  uint8_t descriptor[128];
+  float x;                 ///< X-coordinate in original image space (subpixel precision)
+  float y;                 ///< Y-coordinate in original image space (subpixel precision)
+  float size;              ///< Keypoint diameter in original image space
+  float angle;             ///< Computed orientation of the keypoint
+  float response;          ///< Keypoint strength (absolute Hessian value)
+  uint32_t octave;         ///< Octave index where keypoint was detected
+  uint8_t descriptor[128]; ///< Normalized 128-element SIFT descriptor (L2-normalized)
 } sift_keypoint_t;
 
 /* === Image Operations === */
