@@ -6,7 +6,8 @@
 extern "C" {
 #endif
 
-#define SIFT_MAX_DIMENSION (8192)
+#define SIFT_MAX_DIMENSION                  (16384)
+#define SIFT_MAX_ATTEMPTS_UNTIL_CONVERGENCE (5)
 
 /* === Core Data Structures === */
 
@@ -31,6 +32,11 @@ typedef struct {
   uint32_t octave_layers;   ///< Scales per octave (k-value in Lowe's paper)
   uint32_t border_width;    ///< Width of border in which to ignore keypoints
 } sift_detector_t;
+
+typedef struct {
+  float x, y;
+  uint8_t descriptor[128];
+} sift_keypoint_t;
 
 /* === Image Operations === */
 
@@ -86,6 +92,40 @@ void sift_image_set_pixel(sift_image_t *image, uint32_t x, uint32_t y, float val
  * @warning The input buffer must outlive this function call (no internal copy)
  */
 sift_image_t *sift_image_create_from_u8(const uint8_t *data, uint32_t width, uint32_t height, uint8_t channels);
+
+/* === SIFT Detector === */
+
+/**
+ * @brief Creates a SIFT feature detector with specified parameters
+ * @return Initialized SIFT detector or NULL on failure
+ * @note Caller takes ownership of the returned pointer and must destroy it with sift_detector_destroy()
+ * @details Default parameters (Lowe, 2004):
+ *          - sigma: 1.6
+ *          - contrast threshold: 0.03
+ *          - edge threshold: 10.0
+ *          - octave layers: 3
+ *          - border width: 5
+ * @example
+ * // Create detector with standard parameters
+ * sift_detector_t *det = sift_detector_create();
+ * if (!det) {
+ *   // handle error
+ * }
+ */
+sift_detector_t *sift_detector_create();
+
+/**
+ * @brief Safely destroys SIFT detector
+ * @param detector Double pointer to detector object (set to NULL after destruction)
+ * @example
+ * sift_detector_t *det = sift_detector_create(...);
+ * // ... usage ...
+ * sift_detector_destroy(&det);
+ */
+void sift_detector_destroy(sift_detector_t **detector);
+
+uint32_t sift_detect_and_compute(const sift_detector_t *detector, const sift_image_t *image, sift_keypoint_t **keypoints);
+void sift_keypoints_destroy(sift_keypoint_t **keypoints);
 
 #ifdef __cplusplus
 }
