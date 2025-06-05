@@ -1,4 +1,5 @@
 #include "sift/sift.h"
+#include <float.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -353,11 +354,11 @@ static bool is_local_scale_space_extremum(const image_array_t *dog_pyramid, uint
   return true;
 }
 
-static bool adjust_or_discard_keypoint(const detector_context_t *context, uint32_t octave, uint32_t layer, uint32_t x, uint32_t y, sift_keypoint_t *keypoint) {
+static bool adjust_or_discard_keypoint(const detector_context_t *context, uint32_t x, uint32_t y, sift_keypoint_t *keypoint) {
   uint32_t attempt = 0;
   float dx = 0.0f, dy = 0.0f, ds = 0.0f;
   while (attempt++ < SIFT_MAX_ATTEMPTS_UNTIL_CONVERGENCE) {
-    const uint32_t idx = octave * (context->octave_layers + 2) + layer;
+    const uint32_t idx = keypoint->octave * (context->octave_layers + 2) + keypoint->layer;
     const sift_image_t *curr = context->dog_pyramid.data[idx];
     const sift_image_t *next = context->dog_pyramid.data[idx + 1];
     const sift_image_t *prev = context->dog_pyramid.data[idx - 1];
@@ -400,14 +401,14 @@ static bool adjust_or_discard_keypoint(const detector_context_t *context, uint32
     // Adjust grid x, y, l
     x += roundf(dx);
     y += roundf(dy);
-    layer += roundf(ds);
+    keypoint->layer += roundf(ds);
 
-    if (layer < 1 || layer > context->octave_layers)                              { return false; }
+    if (keypoint->layer < 1 || keypoint->layer > context->octave_layers)          { return false; }
     if (x < context->border_width || x >= (curr->width - context->border_width))  { return false; }
     if (y < context->border_width || y >= (curr->height - context->border_width)) { return false; }
   }
 
-  const uint32_t idx = octave * (context->octave_layers + 2) + layer;
+  const uint32_t idx = keypoint->octave * (context->octave_layers + 2) + keypoint->layer;
   const sift_image_t *curr = context->dog_pyramid.data[idx];
   const sift_image_t *next = context->dog_pyramid.data[idx + 1];
   const sift_image_t *prev = context->dog_pyramid.data[idx - 1];
@@ -432,13 +433,85 @@ static bool adjust_or_discard_keypoint(const detector_context_t *context, uint32
   const float det = dxx * dyy - dxy * dxy;
   if ((tr * tr * context->edge_threshold) >= ((context->edge_threshold + 1) * (context->edge_threshold + 1) * det)) { return false; }
 
-  keypoint->x = (x + dx) * (1 << octave);
-  keypoint->y = (y + dy) * (1 << octave);
-  keypoint->size = context->sigma * powf(2.0f, (layer + ds) / (float)context->octave_layers) * (1 << octave);
-  keypoint->octave = octave + (layer << 8) + ((int32_t)roundf((ds + 0.5f) * 255) << 16);
+  keypoint->x = (x + dx) * (1 << keypoint->octave);
+  keypoint->y = (y + dy) * (1 << keypoint->octave);
+  keypoint->size = context->sigma * powf(2.0f, (keypoint->layer + ds) / (float)context->octave_layers) * (1 << keypoint->octave);
   keypoint->response = fabsf(response);
 
   return true;
+}
+
+static float calculate_keypoint_orientation_histogram(const detector_context_t *context, sift_keypoint_t *keypoint, float *histogram) {
+  // Reset histogram
+  memset(histogram, 0, SIFT_HISTOGRAM_BINS * sizeof(float));
+
+  // Calculate scale-dependent parameters
+  const float octave_scale = 1.0f / (1 << keypoint->octave);
+  const float scale = keypoint->size * 0.5f * octave_scale;
+  const int32_t radius = (int32_t)roundf(SIFT_ORIENTATION_RADIUS * scale);
+  const float sigma = SIFT_ORIENTATION_SIGMA * scale;
+  const float inv_sigma_sq = -0.5f / (sigma * sigma);
+
+  // Get the correct image from pyramid
+  const sift_image_t *image = context->gaussian_pyramid.data[keypoint->octave * (context->octave_layers + 3) + keypoint->layer];
+
+  // Convert keypoint coordinates to this octave
+  const int32_t x_center = (int32_t)roundf(keypoint->x * octave_scale);
+  const int32_t y_center = (int32_t)roundf(keypoint->y * octave_scale);
+
+  // Process neighborhood
+  for (int32_t y = -radius; y <= radius; ++y) {
+    const int32_t yy = y_center + y;
+    if (yy <= 0 || yy >= (int32_t)image->height - 1) { continue; }
+
+    for (int32_t x = -radius; x <= radius; ++x) {
+      const int32_t xx = x_center + x;
+      if (xx <= 0 || xx >= (int32_t)image->width - 1) { continue; }
+
+      // Calculate gradients
+      const float gx = sift_image_get_pixel(image, xx + 1, yy) - sift_image_get_pixel(image, xx - 1, yy);
+      const float gy = sift_image_get_pixel(image, xx, yy + 1) - sift_image_get_pixel(image, xx, yy - 1);
+      const float grad_mag = sqrtf(gx * gx + gy * gy);
+
+      // Calculate orientation (0-360 degrees)
+      float angle = atan2f(gy, gx) * (180.0f / (float)M_PI);
+      if (angle < 0.0f) angle += 360.0f;
+
+      // Calculate Gaussian weight
+      const float weight = expf((x*x + y*y) * inv_sigma_sq);
+
+      // Add to histogram with linear interpolation
+      const float bin = angle * (SIFT_HISTOGRAM_BINS / 360.0f);
+      const int32_t bin0 = (int32_t)floorf(bin);
+      const float w1 = bin - bin0;
+      const float w0 = 1.0f - w1;
+
+      const int32_t bin1 = (bin0 + 1) % SIFT_HISTOGRAM_BINS;
+      histogram[bin0] += w0 * weight * grad_mag;
+      histogram[bin1] += w1 * weight * grad_mag;
+    }
+  }
+
+  // Smooth histogram (6 iterations as in original SIFT)
+  float tmp_hist[SIFT_HISTOGRAM_BINS];
+  for (int32_t i = 0; i < 6; ++i) {
+    for (int32_t j = 0; j < SIFT_HISTOGRAM_BINS; ++j) {
+      const int32_t prev = (j - 1 + SIFT_HISTOGRAM_BINS) % SIFT_HISTOGRAM_BINS;
+      const int32_t next = (j + 1) % SIFT_HISTOGRAM_BINS;
+      tmp_hist[j] = (histogram[prev] + histogram[j] + histogram[next]) / 3.0f;
+    }
+    memcpy(histogram, tmp_hist, sizeof(tmp_hist));
+  }
+
+  // Find maximum value
+  float max_val = 0.0f;
+  for (int32_t j = 0; j < SIFT_HISTOGRAM_BINS; ++j) {
+    if (histogram[j] > max_val) {
+      max_val = histogram[j];
+    }
+  }
+
+  return max_val;
 }
 
 static uint32_t find_scale_space_extrema(const detector_context_t *context, sift_keypoint_t **keypoints) {
@@ -468,10 +541,41 @@ static uint32_t find_scale_space_extrema(const detector_context_t *context, sift
             .size = 0.0f,
             .angle = 0.0f,
             .response = 0.0f,
-            .octave = octave
+            .octave = octave,
+            .layer = layer
           };
-          if (adjust_or_discard_keypoint(context, octave, layer, x, y, &potential_keypoint)) {
-            (*keypoints)[num_keypoints++] = potential_keypoint;
+          if (adjust_or_discard_keypoint(context, x, y, &potential_keypoint)) {
+            float histogram[SIFT_HISTOGRAM_BINS];
+            const float orientation_max = calculate_keypoint_orientation_histogram(context, &potential_keypoint, histogram);
+            const float orientation_threshold = 0.8f * orientation_max;
+
+            for (int32_t j = 0; j < SIFT_HISTOGRAM_BINS; j++) {
+              const int32_t prev_idx = (j - 1 + SIFT_HISTOGRAM_BINS) % SIFT_HISTOGRAM_BINS;
+              const int32_t next_idx = (j + 1) % SIFT_HISTOGRAM_BINS;
+
+              // Check if current bin is a local maximum and above threshold
+              if (histogram[j] > histogram[prev_idx] && 
+                  histogram[j] > histogram[next_idx] &&
+                  histogram[j] >= orientation_threshold) {
+
+                // Parabolic interpolation to find sub-bin peak position
+                const float numerator = histogram[prev_idx] - histogram[next_idx];
+                const float denominator = 2.0f * (histogram[prev_idx] - 2.0f * histogram[j] + histogram[next_idx]);
+                const float offset = (fabsf(denominator) > 1e-6f) ? 0.5f * numerator / denominator : 0.0f;
+
+                // Handle wrap-around for circular histogram
+                float peak_bin = j + offset;
+                if (peak_bin < 0)                         { peak_bin += SIFT_HISTOGRAM_BINS; }
+                else if (peak_bin >= SIFT_HISTOGRAM_BINS) { peak_bin -= SIFT_HISTOGRAM_BINS; }
+
+                // Convert to angle in radians (0 to 2pi)
+                potential_keypoint.angle = fmodf(2.0f * M_PI * peak_bin / SIFT_HISTOGRAM_BINS, 2.0f * M_PI);
+                if (potential_keypoint.angle < 0) { potential_keypoint.angle += 2.0f * M_PI; }
+
+                // Store the keypoint
+                (*keypoints)[num_keypoints++] = potential_keypoint;
+              }
+            }
           }
         }
       }

@@ -8,6 +8,9 @@ extern "C" {
 
 #define SIFT_MAX_DIMENSION                  (16384)
 #define SIFT_MAX_ATTEMPTS_UNTIL_CONVERGENCE (5)
+#define SIFT_HISTOGRAM_BINS                 (36)
+#define SIFT_ORIENTATION_SIGMA              (1.5f)
+#define SIFT_ORIENTATION_RADIUS             (3 * SIFT_ORIENTATION_SIGMA)
 
 /* === Core Data Structures === */
 
@@ -44,6 +47,7 @@ typedef struct {
   float angle;             ///< Computed orientation of the keypoint
   float response;          ///< Keypoint strength (absolute Hessian value)
   uint32_t octave;         ///< Octave index where keypoint was detected
+  uint32_t layer;          ///< Layer index where keypoint was detected
   uint8_t descriptor[128]; ///< Normalized 128-element SIFT descriptor (L2-normalized)
 } sift_keypoint_t;
 
