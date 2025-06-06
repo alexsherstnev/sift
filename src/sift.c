@@ -593,6 +593,53 @@ static uint32_t find_scale_space_extrema(const detector_context_t *context, sift
   return num_keypoints;
 }
 
+static int keypoint_comparator(const void *a, const void *b) {
+  const sift_keypoint_t *kp1 = (const sift_keypoint_t *)a;
+  const sift_keypoint_t *kp2 = (const sift_keypoint_t *)b;
+
+  if (kp1->x != kp2->x)               { return kp1->x < kp2->x ? -1 : 1;               }
+  if (kp1->y != kp2->y)               { return kp1->y < kp2->y ? -1 : 1;               }
+  if (kp1->size != kp2->size)         { return kp1->size > kp2->size ? -1 : 1;         }
+  if (kp1->angle != kp2->angle)       { return kp1->angle < kp2->angle ? -1 : 1;       }
+  if (kp1->response != kp2->response) { return kp1->response > kp2->response ? -1 : 1; }
+  if (kp1->octave != kp2->octave)     { return kp1->octave > kp2->octave ? -1 : 1;     }
+
+  return 0;
+}
+
+static uint32_t remove_duplicate_keypoints(sift_keypoint_t **keypoints, uint32_t num_keypoints) {
+  if (num_keypoints < 2) { return num_keypoints; }
+
+  // 1. Sort all keypoints
+  qsort(*keypoints, num_keypoints, sizeof(sift_keypoint_t), keypoint_comparator);
+
+  // 2. Remove duplicates
+  uint32_t i, j;
+  for(i = 0, j = 1; j < num_keypoints; ++j) {
+    sift_keypoint_t kp1 = (*keypoints)[i];
+    sift_keypoint_t kp2 = (*keypoints)[j];
+    if(kp1.x != kp2.x || kp1.y != kp2.y ||
+       kp1.size != kp2.size || kp1.angle != kp2.angle) {
+      (*keypoints)[++i] = (*keypoints)[j];
+    }
+  }
+
+  // 3. Resize keyponts
+  const uint32_t new_num_keypoints = i + 1;
+  if (new_num_keypoints != num_keypoints) {
+    *keypoints = realloc(*keypoints, new_num_keypoints * sizeof(sift_keypoint_t));
+  }
+
+  return new_num_keypoints;
+}
+
+static void calculate_keypoint_descriptors(const detector_context_t * context, sift_keypoint_t **keypoints, uint32_t num_keypoints) {
+//  for (uint32_t i = 0; i < num_keypoints; ++i) {
+//    sift_keypoint_t *keypoint = &(*keypoints)[i];
+//
+//  }
+}
+
 /* === Public Interface Implementation === */
 
 sift_image_t *sift_image_create(uint32_t width, uint32_t height) {
@@ -735,14 +782,20 @@ uint32_t sift_detect_and_compute(const sift_detector_t *detector, const sift_ima
   // 6. Find scale space extrema
   uint32_t num_keypoints = find_scale_space_extrema(&context, keypoints);
 
-  // 7. Convert found keypoints into original image size
+  // 7. Remove duplicates
+  num_keypoints = remove_duplicate_keypoints(keypoints, num_keypoints);
+  
+  // 8. Calculate descriptors
+  calculate_keypoint_descriptors(&context, keypoints, num_keypoints);
+
+  // 9. Convert found keypoints into original image size
   for (uint32_t i = 0; i < num_keypoints; ++i) {
     (*keypoints)[i].x *= 0.5f;
     (*keypoints)[i].y *= 0.5f;
     (*keypoints)[i].size *= 0.5f;
   }
 
-  // Free all resources
+  // 10. Free all resources
   detector_context_destroy(&context);
 
   return num_keypoints;
