@@ -3,7 +3,7 @@
 **A lightweight, dependency-free implementation of Scale-Invariant Feature Transform**
 *Designed for easy integration into embedded systems and computer vision pipelines*
 
-## 🛠️ TODO
+### 🛠️ TODO
 
 - SIMD optimizations
 
