@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -11,6 +12,12 @@ extern "C" {
 #define SIFT_HISTOGRAM_BINS                 (36)
 #define SIFT_ORIENTATION_SIGMA              (1.5f)
 #define SIFT_ORIENTATION_RADIUS             (3 * SIFT_ORIENTATION_SIGMA)
+#define SIFT_DESCRIPTOR_HISTOGRAMS          (4)
+#define SIFT_DESCRIPTOR_BINS                (8)
+#define SIFT_DESCRIPTOR_SCALE_FACTOR        (3.0f)
+#define SIFT_DESCRIPTOR_WINDOW_SIZE         (16.0f)
+#define SIFT_DESCRIPTOR_MAG_THRESH          (0.2f)
+#define SIFT_DESCRIPTOR_NORM_FACTOR         (512.0f)
 
 /* === Core Data Structures === */
 
@@ -50,6 +57,16 @@ typedef struct {
   uint32_t layer;          ///< Layer index where keypoint was detected
   uint8_t descriptor[128]; ///< Normalized 128-element SIFT descriptor (L2-normalized)
 } sift_keypoint_t;
+
+/**
+ * @brief SIFT feature match pair
+ * @details Contains indices of matched keypoints from two sets and their distance measure
+ */
+typedef struct {
+  uint32_t from_idx; ///< Index of the keypoint in from set (first image)
+  uint32_t to_idx;   ///< Index of the keypoint in to set (second image)
+  float distance;    ///< L2 distance between matched descriptors
+} sift_match_t;
 
 /* === Image Operations === */
 
@@ -137,8 +154,43 @@ sift_detector_t *sift_detector_create();
  */
 void sift_detector_destroy(sift_detector_t **detector);
 
+/**
+ * @brief Performs full SIFT feature detection and descriptor computation
+ * @param detector Initialized SIFT detector (must be non-NULL)
+ * @param image Input image to process (must be non-NULL)
+ * @param[out] keypoints Output array of detected keypoints (will be allocated)
+ * @return Number of detected keypoints or 0 on:
+ *         - Invalid parameters
+ *         - Detection failure
+ *         - Memory allocation error
+ * @note The caller takes ownership of the returned keypoints and must destroy them
+ *       with sift_keypoints_destroy()
+ * @warning This function may take significant time for large images
+ * @example
+ * sift_keypoint_t *keys = NULL;
+ * uint32_t count = sift_detect_and_compute(det, img, &keys);
+ * if (count > 0) {
+ *   // Process keypoints...
+ *   sift_keypoints_destroy(&keys);
+ * }
+ */
 uint32_t sift_detect_and_compute(const sift_detector_t *detector, const sift_image_t *image, sift_keypoint_t **keypoints);
+
+/**
+ * @brief Safely destroys array of SIFT keypoints
+ * @param keypoints Double pointer to keypoints array (set to NULL after destruction)
+ * @note Handles NULL input gracefully
+ * @example
+ * sift_keypoint_t *keys = ...;
+ * sift_keypoints_destroy(&keys);
+ * assert(keys == NULL);
+ */
 void sift_keypoints_destroy(sift_keypoint_t **keypoints);
+
+uint32_t sift_find_matches(const sift_keypoint_t *keys1, uint32_t count1,
+                           const sift_keypoint_t *keys2, uint32_t count2,
+                           sift_match_t **matches, float match_threshold,
+                           bool mutual_check, bool sort_by_distance);
 
 #ifdef __cplusplus
 }
