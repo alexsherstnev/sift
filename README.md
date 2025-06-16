@@ -3,26 +3,26 @@
 **A lightweight, dependency-free implementation of Scale-Invariant Feature Transform**
 *Designed for easy integration into embedded systems and computer vision pipelines*
 
-# 🛠️ TODO
+## 🛠️ TODO
 
 - SIMD optimizations
 
-# 📦 Installation
+## 📦 Installation
 
-## Requirements
+### Requirements
 
 Make sure the following dependencies are installed:
 
 - make
 - gcc
 
-## Build
+### Build
 
 ```bash
 make
 ```
 
-## ▶️ Usage
+### ▶️ Usage
 
 ```
 SIFT Feature Tool v1.0
@@ -41,9 +41,9 @@ Examples:
   Find matches: sift_tool image1.jpg image2.jpg
 ```
 
-# 🖼️ Example Results
+## 🖼️ Example Results
 
 ![box_matches](images/box_matches.jpg)
-![card_matches](images/card_matches..jpg)
-![cartridge_matches](images/cartridge_matches..jpg)
+![card_matches](images/card_matches.jpg)
+![cartridge_matches](images/cartridge_matches.jpg)
 
