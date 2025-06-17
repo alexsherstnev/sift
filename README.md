@@ -18,7 +18,11 @@ Make sure the following dependencies are installed:
 
 #### Libraries used
 
-[stb_image](https://github.com/nothings/stb) for loading images. (included in this repo)
+[stb_image](https://github.com/nothings/stb) - Used exclusively by the command-line interface tool for image loading.
+
+**Important Note**:
+
+The core SIFT implementation itself has no external dependencies. The `stb_image` library is only required when building the `CLI` utility.
 
 ### Build
 
