@@ -40,15 +40,13 @@ CLI_OBJ := $(patsubst $(CLI_DIR)/%.c, $(OBJ_DIR)/cli/%.o, $(CLI_SOURCES))
 CLI_TARGET := $(BIN_DIR)/$(PROJECT)
 
 # Phony Targets
-.PHONY: all lib cli tests clean
+.PHONY: all lib cli clean
 
-all: lib cli tests
+all: lib cli
 
 lib: $(LIB_TARGET)
 
 cli: $(CLI_TARGET)
-
-tests: $(TESTS_TARGET)
 
 clean:
 	$(RM) -rf $(BUILD_DIR)

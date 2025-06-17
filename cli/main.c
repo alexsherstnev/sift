@@ -1,12 +1,11 @@
 #include <stdio.h>
+
 #define STB_IMAGE_IMPLEMENTATION
-#define STB_IMAGE_WRITE_IMPLEMENTATION
 
 #include "stb_image.h"
-#include "stb_image_write.h"
 #include "sift/sift.h"
 
-#define CLI_VERSION "1.0"
+#define CLI_VERSION "1.0.0"
 
 static void print_help() {
   printf("SIFT Feature Tool v%s\n", CLI_VERSION);
@@ -23,7 +22,7 @@ static void print_help() {
   printf("  Find matches: sift_tool image1.jpg image2.jpg\n");
 }
 
-static int detect_and_print(const char* filename, const sift_detector_t* detector, const char* output_file) {
+static int detect_and_compute(const char* filename, const sift_detector_t* detector, const char* output_file) {
   // Load image
   int width, height, channels;
   unsigned char* image = stbi_load(filename, &width, &height, &channels, 0);
@@ -144,7 +143,7 @@ static int find_matches(const char* file1, const char* file2, const sift_detecto
   }
 
   // Cleanup
-  free(matches);
+  sift_matches_destroy(&matches);
   sift_keypoints_destroy(&keys1);
   sift_keypoints_destroy(&keys2);
   sift_image_destroy(&sift_img1);
@@ -192,13 +191,15 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
+  // 3. Processing
   int result;
   if (image2) {
     result = find_matches(image1, image2, detector, output_file);
   } else {
-    result = detect_and_print(image1, detector, output_file);
+    result = detect_and_compute(image1, detector, output_file);
   }
 
+  // Cleanup
   sift_detector_destroy(&detector);
 
   return result;

@@ -16,10 +16,19 @@ Make sure the following dependencies are installed:
 - make
 - gcc
 
+#### Libraries used
+
+[stb_image](https://github.com/nothings/stb) for loading images. (included in this repo)
+
 ### Build
 
 ```bash
+# DEBUG
 make
+
+# RELEASE
+make BUILD_TYPE=RELEASE
+
 ```
 
 ### ▶️ Usage

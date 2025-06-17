@@ -971,7 +971,6 @@ uint32_t sift_find_matches(const sift_keypoint_t *keys1, uint32_t count1,
   if (!matches) { return 0; }
 
   uint32_t good_matches = 0;
-
   for (uint32_t i = 0; i < count1; ++i) {
     uint32_t best_idx = 0;
     float best_dist = FLT_MAX, second_best_dist = FLT_MAX;
@@ -1021,5 +1020,11 @@ uint32_t sift_find_matches(const sift_keypoint_t *keys1, uint32_t count1,
   }
 
   return good_matches;
+}
+
+void sift_matches_destroy(sift_match_t **matches) {
+  if (!matches || !(*matches)) { return; }
+  free(*matches);
+  *matches = NULL;
 }
 

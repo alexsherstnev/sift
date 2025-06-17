@@ -187,10 +187,71 @@ uint32_t sift_detect_and_compute(const sift_detector_t *detector, const sift_ima
  */
 void sift_keypoints_destroy(sift_keypoint_t **keypoints);
 
+/**
+ * @brief Finds matches between two sets of SIFT keypoints using descriptor similarity
+ * @param keys1 First set of keypoints (query features, must be non-NULL)
+ * @param count1 Number of keypoints in first set (must be >0)
+ * @param keys2 Second set of keypoints (train features, must be non-NULL)
+ * @param count2 Number of keypoints in second set (must be >0)
+ * @param[out] matches Output array of matched pairs (will be allocated)
+ * @param match_threshold Maximum distance ratio between best/second-best matches (0.6-0.8 recommended)
+ * @param mutual_check If true, requires matches to be mutual (both-way best matches)
+ * @param sort_by_distance If true, sorts matches by ascending descriptor distance
+ * @return Number of valid matches found or 0 on:
+ *         - Invalid parameters
+ *         - No matches passing threshold
+ *         - Memory allocation error
+ * @note Matching algorithm details:
+ *       1. For each keypoint in keys1, finds two nearest neighbors in keys2
+ *       2. Applies Lowe's ratio test (best_dist/second_best_dist < threshold)
+ *       3. Optionally verifies mutual best match (if mutual_check=true)
+ *       4. Optionally sorts results by match quality (if sort_by_distance=true)
+ * @warning Caller must free matches array with sift_matches_destroy()
+ * @see Lowe, D.G. "Distinctive Image Features from Scale-Invariant Keypoints", IJCV 2004
+ * @example
+ * sift_keypoint_t *keys1, *keys2;
+ * uint32_t count1, count2;
+ * sift_match_t *matches = NULL;
+ * 
+ * uint32_t num_matches = sift_find_matches(
+ *     keys1, count1,
+ *     keys2, count2,
+ *     &matches,
+ *     0.7f,    // match_threshold
+ *     true,    // mutual_check
+ *     true     // sort_by_distance
+ * );
+ * 
+ * if (num_matches > 0) {
+ *     for (uint32_t i = 0; i < num_matches; i++) {
+ *         printf("Match %d: query_idx=%u, train_idx=%u, distance=%.2f\n",
+ *                i, matches[i].query_idx, matches[i].train_idx, matches[i].distance);
+ *     }
+ *     free(matches);
+ * }
+ */
 uint32_t sift_find_matches(const sift_keypoint_t *keys1, uint32_t count1,
                            const sift_keypoint_t *keys2, uint32_t count2,
                            sift_match_t **matches, float match_threshold,
                            bool mutual_check, bool sort_by_distance);
+
+/**
+ * @brief Safely deallocates memory for SIFT feature matches
+ * @param[in,out] matches Double pointer to matches array (will be set to NULL after destruction)
+ * @example
+ * // Safe usage pattern:
+ * sift_match_t *matches = NULL;
+ * uint32_t count = sift_find_matches(..., &matches);
+ * 
+ * // Process matches...
+ * 
+ * sift_matches_destroy(&matches); // matches set to NULL
+ * assert(matches == NULL);
+ * 
+ * // Safe to call again:
+ * sift_matches_destroy(&matches); // No effect
+ */
+void sift_matches_destroy(sift_match_t **matches);
 
 #ifdef __cplusplus
 }
